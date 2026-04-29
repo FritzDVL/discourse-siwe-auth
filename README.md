@@ -19,7 +19,10 @@ cd /var/discourse
 nano containers/app.yml
 ```
 
-Add the plugin's repository URL to the `after_code` hook:
+Add the plugin's repository URL to the `after_code` hook. Always run the clone
+as the `discourse` user — on Ubuntu 24.04 a plain `git clone` runs as `root`
+inside the container and produces files the Rails build cannot read, which then
+surfaces during `./launcher rebuild app`:
 
 ```yml
 hooks:
@@ -31,9 +34,12 @@ hooks:
         - sudo -E -u discourse git clone https://github.com/signinwithethereum/discourse-siwe-auth.git # <-- added
 ```
 
-Follow the existing format of the `docker_manager.git` line; if it does not
-contain `sudo -E -u discourse` then use
-`git clone https://github.com/signinwithethereum/discourse-siwe-auth.git` instead.
+The `sudo -E -u discourse` prefix preserves the environment (`-E`) and runs the
+clone under the unprivileged `discourse` user (`-u discourse`) that the rest of
+the Discourse build expects to own the plugin tree. Match the exact form of the
+existing `docker_manager.git` line in your `app.yml`; if that line is missing
+the prefix, your container is using an older layout — add the prefix to both
+lines rather than dropping it from the new one.
 
 Rebuild the container:
 
