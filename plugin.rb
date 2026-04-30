@@ -56,11 +56,24 @@ unless File.exist?(rbsecp_spec_file)
     raise("rbsecp256k1 #{RBSECP256K1_VERSION} pre-install failed")
 end
 
+# Precise pattern: only the exact add_runtime_dependency line for rubyzip.
+# Avoids accidentally stripping other lines if upstream changes formatting.
+rbsecp_rubyzip_dep_re =
+  /^\s*s\.add_runtime_dependency\(?\s*%q<rubyzip>.*?\)?\s*\n/
 rbsecp_spec_content = File.read(rbsecp_spec_file)
-if rbsecp_spec_content.include?('rubyzip')
-  patched = rbsecp_spec_content.lines.reject { |l| l.include?('rubyzip') }.join
-  File.write(rbsecp_spec_file, patched)
+if rbsecp_spec_content =~ rbsecp_rubyzip_dep_re
+  patched = rbsecp_spec_content.sub(rbsecp_rubyzip_dep_re, '')
+  # Atomic replace via tempfile + rename so a concurrent reader never sees a
+  # half-written gemspec.
+  tmp = "#{rbsecp_spec_file}.patching.#{Process.pid}"
+  File.write(tmp, patched)
+  File.rename(tmp, rbsecp_spec_file)
   Gem::Specification.reset
+  Rails.logger.info(
+    "[discourse-siwe-auth] Stripped spurious rubyzip runtime dep from " \
+    "rbsecp256k1-#{RBSECP256K1_VERSION}.gemspec to avoid Gem::ConflictError " \
+    "with Discourse's bundled rubyzip."
+  ) if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
 end
 
 gem 'rbsecp256k1', RBSECP256K1_VERSION, require: false
