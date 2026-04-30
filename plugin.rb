@@ -32,7 +32,38 @@ gem 'ffi-compiler',  '1.3.2',  require: false
 gem 'konstructor',   '1.0.2',  require: false
 gem 'scrypt',        '3.1.0',  require: false
 gem 'keccak',        '1.3.3',  require: false
-gem 'rbsecp256k1',   '6.0.0',  require: false
+
+# rbsecp256k1 6.0.0 (and every published version since 5.0.0) declares a
+# spurious runtime dependency on `rubyzip ~> 2.3`. It only uses rubyzip in
+# its `extconf.rb` to unpack libsecp256k1's source archive at build time —
+# it has zero runtime use of rubyzip. But Discourse's main bundle activates
+# rubyzip 3.x at boot, so when Discourse's plugin DSL calls `spec.activate`
+# on rbsecp256k1, RubyGems raises Gem::ConflictError.
+#
+# Workaround: pre-install rbsecp256k1 ourselves and strip the bogus rubyzip
+# line from the installed gemspec on disk. Discourse's plugin loader then
+# sees the gem already installed, loads the patched spec, and activates it
+# without conflict. Idempotent across rebuilds.
+RBSECP256K1_VERSION = '6.0.0'
+rbsecp_gems_dir = File.expand_path("../gems/#{RUBY_VERSION}", __FILE__)
+rbsecp_spec_file = "#{rbsecp_gems_dir}/specifications/rbsecp256k1-#{RBSECP256K1_VERSION}.gemspec"
+
+unless File.exist?(rbsecp_spec_file)
+  install_cmd = "gem install rbsecp256k1 -v #{RBSECP256K1_VERSION} " \
+                "-i #{rbsecp_gems_dir} --no-document " \
+                "--ignore-dependencies --no-user-install"
+  Bundler.with_unbundled_env { system(install_cmd) } ||
+    raise("rbsecp256k1 #{RBSECP256K1_VERSION} pre-install failed")
+end
+
+rbsecp_spec_content = File.read(rbsecp_spec_file)
+if rbsecp_spec_content.include?('rubyzip')
+  patched = rbsecp_spec_content.lines.reject { |l| l.include?('rubyzip') }.join
+  File.write(rbsecp_spec_file, patched)
+  Gem::Specification.reset
+end
+
+gem 'rbsecp256k1', RBSECP256K1_VERSION, require: false
 
 # eth >= 0.5.16 is the first version that explicitly depends on `base64`,
 # which Ruby 3.4 demoted from default-gem to bundled-gem. Its full transitive
