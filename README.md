@@ -19,27 +19,42 @@ cd /var/discourse
 nano containers/app.yml
 ```
 
-Add the plugin's repository URL to the `after_code` hook. Always run the clone
-as the `discourse` user — on Ubuntu 24.04 a plain `git clone` runs as `root`
-inside the container and produces files the Rails build cannot read, which then
-surfaces during `./launcher rebuild app`:
+Add a `before_code` hook to install `rubyzip` and an `after_code` hook to
+clone the plugin:
 
 ```yml
 hooks:
+  before_code:
+    - exec:
+        cmd:
+          - gem install rubyzip
   after_code:
     - exec:
       cd: $home/plugins
       cmd:
         - sudo -E -u discourse git clone https://github.com/discourse/docker_manager.git
-        - sudo -E -u discourse git clone https://github.com/signinwithethereum/discourse-siwe-auth.git # <-- added
+        - sudo -E -u discourse git clone https://github.com/FritzDVL/discourse-siwe-auth.git # <-- added
 ```
 
-The `sudo -E -u discourse` prefix preserves the environment (`-E`) and runs the
-clone under the unprivileged `discourse` user (`-u discourse`) that the rest of
-the Discourse build expects to own the plugin tree. Match the exact form of the
-existing `docker_manager.git` line in your `app.yml`; if that line is missing
-the prefix, your container is using an older layout — add the prefix to both
-lines rather than dropping it from the new one.
+### Why both hooks are needed
+
+**`before_code` → `gem install rubyzip`**: the `rbsecp256k1` native crypto gem
+this plugin depends on uses `rubyzip` inside its own `extconf.rb` to fetch and
+unpack the libsecp256k1 C source during build. That happens at `bundle install`
+time, *before* Discourse processes the `gem` directives in `plugin.rb`, so the
+plugin's own gem block can't supply it in time. Installing `rubyzip`
+system-wide in `before_code` guarantees it's on disk when the native
+extension's build script runs.
+
+**`after_code` → `sudo -E -u discourse git clone`**: always run the clone as
+the unprivileged `discourse` user. On Ubuntu 24.04 a plain `git clone` runs as
+`root` inside the container and produces files the Rails build cannot read,
+which surfaces as a confusing failure during `./launcher rebuild app`. The
+`-E` flag preserves the environment; `-u discourse` runs the command as the
+user the rest of the Discourse build expects to own the plugin tree. Match the
+exact form of the existing `docker_manager.git` line in your `app.yml`; if
+that line is missing the prefix, your container is using an older layout —
+add the prefix to both lines rather than dropping it from the new one.
 
 Rebuild the container:
 
