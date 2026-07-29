@@ -3,7 +3,9 @@
 A Discourse plugin that lets users authenticate with their Ethereum wallet using
 the [Sign-In with Ethereum (SIWE)](https://login.xyz) standard. Injected wallets
 (MetaMask, Safe, etc.) work out of the box. ENS names and avatars are resolved
-server-side when an RPC endpoint is configured.
+server-side when an RPC endpoint is configured, and users with a
+[Society Protocol](https://societyprotocol.io/) profile badge can choose whether
+to display their wallet, ENS name, or Society identity.
 
 > **About this fork.** This is a fork of
 > [`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth)
@@ -94,6 +96,10 @@ WalletConnect / Reown project ID. Without a project ID, only injected wallets
 | **Siwe ethereum rpc url** | _Optional._ An Ethereum JSON-RPC endpoint used for ENS name/avatar resolution and EIP-1271 signature verification (required for smart contract wallets like SAFE). A dedicated provider (Alchemy, Infura) is recommended. Example: `https://mainnet.infura.io/v3/YOUR_KEY`. |
 | **Siwe project ID** | _Optional._ A WalletConnect / Reown project ID. Without it, only injected wallets (MetaMask, Safe, etc.) are available. To enable WalletConnect, create a free project ID at [dashboard.reown.com](https://dashboard.reown.com). |
 | **Siwe statement** | The human-readable statement shown in the SIWE message. Defaults to "Sign in with Ethereum". |
+| **Siwe society enabled** | Enable Society Protocol identity resolution and the display-identity toggle. |
+| **Siwe society subgraph url** | _Optional._ The Society Protocol subgraph endpoint. Defaults to the live mainnet endpoint; leave blank to force direct RPC resolution. |
+| **Siwe society badges contract** | Society Protocol Badges (ERC-1155) contract address. Defaults to the current mainnet proxy; update only if the contract is redeployed. |
+| **Siwe identity resolution mode** | Preferred resolution mode: `subgraph` (default, falls back to RPC) or `rpc` (direct contract calls only). |
 
 ## Compatibility notes (Discourse + Ruby 3.4)
 
@@ -191,6 +197,7 @@ EIP-6492 smart wallet signature verification.
 
 ```bash
 ruby test/ens_unit_test.rb
+ruby test/society_unit_test.rb
 ruby test/smart_wallet_unit_test.rb
 ```
 
@@ -198,6 +205,7 @@ ruby test/smart_wallet_unit_test.rb
 
 ```bash
 ruby test/ens_integration_test.rb
+ruby test/society_integration_test.rb
 ruby test/smart_wallet_integration_test.rb
 ```
 
@@ -205,7 +213,16 @@ By default, integration tests use a public RPC. Set `RPC_URL` for a dedicated
 provider:
 
 ```bash
-RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY ruby test/smart_wallet_integration_test.rb
+RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY ruby test/society_integration_test.rb
+```
+
+To test the positive Society resolution path, set an address that holds a
+profile badge:
+
+```bash
+RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY \
+SOCIETY_ADDRESS=0x... \
+ruby test/society_integration_test.rb
 ```
 
 ### Run all tests
@@ -226,5 +243,31 @@ the name is resolved and verified server-side and suggested as the default
 username. ENS avatars are fetched via the ENS metadata service and used as the
 profile photo.
 
+If Society Protocol resolution is enabled, the plugin also resolves any profile
+badge linked to the wallet (via the Society subgraph or direct RPC). After
+sign-up, users can choose their preferred display identity — wallet, ENS, or
+Society — from **Preferences > Profile**. The chosen name and avatar are applied
+to the Discourse profile immediately; the username itself is never changed by
+this feature.
+
 Alternatively, existing users can connect their Ethereum accounts via
 their profile settings.
+
+### Backfilling existing users
+
+After deploying the plugin, run the rake task to backfill custom fields for
+existing SIWE users:
+
+```bash
+bundle exec rake siwe:migrate_identities
+```
+
+Dry-run first:
+
+```bash
+bundle exec rake siwe:migrate_identities[true]
+```
+
+The task resolves ENS and Society identities, sets the default preference, and
+stores the result in user custom fields. Existing display names are left
+untouched unless the user toggles their preferred identity.

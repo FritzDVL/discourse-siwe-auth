@@ -9,3 +9,15 @@ discourse_siwe:
   siwe_statement:
     client: true
     default: 'Sign in with Ethereum'
+  siwe_society_enabled:
+    default: true
+  siwe_society_subgraph_url:
+    default: 'https://api.studio.thegraph.com/query/46833/society-mainnet/version/latest'
+  siwe_society_badges_contract:
+    default: '0x2313C0cDdc233c92d16c2cfE17DF5fDCcE556763'
+  siwe_identity_resolution_mode:
+    default: 'subgraph'
+    type: enum
+    choices:
+      - subgraph
+      - rpc

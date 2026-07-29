@@ -29,3 +29,28 @@
   display: grid;
   align-items: center;
 }
+
+.siwe-identity-selector {
+  .identity-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .identity-name {
+    font-weight: 700;
+  }
+
+  .identity-source {
+    color: var(--primary-medium);
+    font-size: var(--font-down-1);
+  }
+
+  .identity-preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+}

@@ -5,6 +5,13 @@ en:
         categories:
           discourse_siwe: 'Sign in With Ethereum'
   js:
+    discourse_siwe:
+      identity:
+        title: 'Web3 display identity'
+        source:
+          wallet: 'Wallet'
+          ens: 'ENS'
+          society: 'Society Protocol'
     login:
       siwe:
         name: 'SIWE'

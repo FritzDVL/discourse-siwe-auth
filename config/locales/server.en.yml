@@ -4,3 +4,7 @@ en:
     siwe_project_id: 'Project ID for Web3Modal'
     siwe_ethereum_rpc_url: 'Ethereum RPC URL — required for ENS name/avatar resolution and EIP-1271 smart contract wallet verification (e.g. SAFE). A dedicated endpoint (Alchemy, Infura) is recommended.'
     siwe_statement: 'Statement that will be displayed in the SIWE message'
+    siwe_society_enabled: 'Enable Society Protocol identity resolution and the display-identity toggle'
+    siwe_society_subgraph_url: 'Society Protocol subgraph URL (optional; falls back to direct RPC if blank or failing)'
+    siwe_society_badges_contract: 'Society Protocol Badges (ERC-1155) contract address'
+    siwe_identity_resolution_mode: 'Preferred resolution mode for Society Protocol identities'

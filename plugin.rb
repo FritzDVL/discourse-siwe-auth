@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # name: discourse-siwe-auth
-# about: Authenticate users via the Sign In with Ethereum (SIWE) standard
-# version: 1.2.1
+# about: Authenticate users via Sign In with Ethereum (SIWE), with optional Society Protocol identity resolution
+# version: 1.3.0
 # authors: EthID
 # url: https://siwe.xyz
 
@@ -114,6 +114,63 @@ class ::SiweAuthenticator < ::Auth::ManagedAuthenticator
   def description_for_auth_hash(auth_token)
     auth_token&.provider_uid || super
   end
+
+  def after_authenticate(auth_token, existing_account: nil)
+    result = super
+
+    wallet = auth_token&.uid&.downcase
+    return result unless wallet.present?
+
+    info = auth_token[:info] || {}
+    ens_name   = info[:nickname].presence
+    ens_name   = nil if ens_name&.downcase == wallet
+    ens_avatar = info[:image].presence
+
+    if result.user
+      cf = result.user.custom_fields
+      cf['wallet_address'] ||= wallet
+      cf['ens_name']   = ens_name   if ens_name
+      cf['ens_avatar'] = ens_avatar if ens_avatar
+      cf['preferred_identity'] ||= DiscourseSiwe::IdentityStore.default_preference(cf)
+      result.user.save_custom_fields
+
+      if SiteSetting.siwe_society_enabled && DiscourseSiwe::IdentityStore.society_stale?(result.user)
+        Jobs.enqueue(:refresh_siwe_identity, user_id: result.user.id)
+      end
+    else
+      result.extra_data = (result.extra_data || {}).merge(
+        wallet_address: wallet,
+        ens_name: ens_name,
+        ens_avatar: ens_avatar,
+      )
+      result.name       = ens_name   if ens_name
+      result.avatar_url = ens_avatar if ens_avatar
+    end
+
+    result
+  end
+
+  def after_create_account(user, auth_result)
+    super
+    return unless SiteSetting.siwe_society_enabled
+
+    extra = auth_result[:extra_data] || {}
+    wallet = extra['wallet_address'] || extra[:wallet_address]
+    return unless wallet.present?
+
+    user.custom_fields['wallet_address'] = wallet.downcase
+    user.custom_fields['ens_name']       = extra['ens_name']   || extra[:ens_name]
+    user.custom_fields['ens_avatar']     = extra['ens_avatar'] || extra[:ens_avatar]
+
+    society = DiscourseSiwe::IdentityResolver.resolve(wallet)
+    DiscourseSiwe::IdentityStore.store_society(user, society)
+    user.custom_fields['preferred_identity'] =
+      DiscourseSiwe::IdentityStore.default_preference(user.custom_fields)
+    user.save_custom_fields
+
+    DiscourseSiwe::DisplayNameApplier.apply(user)
+    user.save!
+  end
 end
 
 auth_provider authenticator: ::SiweAuthenticator.new,
@@ -122,10 +179,30 @@ auth_provider authenticator: ::SiweAuthenticator.new,
               full_screen_login: true
 
 after_initialize do
+  load File.expand_path('../lib/discourse_siwe/eth_rpc.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/ens_resolver.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/identity_resolver.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/identity_store.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/display_name_applier.rb', __FILE__)
   load File.expand_path('../app/controllers/discourse_siwe/auth_controller.rb', __FILE__)
+  load File.expand_path('../app/jobs/regular/refresh_siwe_identity.rb', __FILE__)
+
+  IdentityStore::FIELDS.each do |field|
+    User.register_custom_field_type(field, :string)
+  end
+
+  # Expose web3 identities only to the owning user.
+  add_to_serializer(:user, :web3_identities) do
+    DiscourseSiwe::IdentityStore.web3_identities(object)
+  end
+
+  add_to_serializer(:user, :include_web3_identities?) do
+    scope&.user == object
+  end
 
   Discourse::Application.routes.prepend do
-    get '/discourse-siwe/auth' => 'discourse_siwe/auth#index'
-    get '/discourse-siwe/message' => 'discourse_siwe/auth#message'
+    get  '/discourse-siwe/auth'           => 'discourse_siwe/auth#index'
+    get  '/discourse-siwe/message'        => 'discourse_siwe/auth#message'
+    post '/discourse-siwe/update-identity' => 'discourse_siwe/auth#update_identity'
   end
 end

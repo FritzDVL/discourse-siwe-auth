@@ -6,9 +6,6 @@ module OmniAuth
     class Siwe
       include OmniAuth::Strategy
 
-      # ENS Registry contract address (same on all networks)
-      ENS_REGISTRY = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
-
       # EIP-6492 universal signature validator bytecode (no 0x prefix).
       # Deployed via eth_call (no actual deployment) to verify EOA, ERC-1271,
       # and EIP-6492 signatures in a single call.
@@ -24,7 +21,7 @@ module OmniAuth
       end
 
       info do
-        ens_name, ens_avatar = resolve_ens(@verified_address)
+        ens_name, ens_avatar = DiscourseSiwe::EnsResolver.resolve(@verified_address)
         display_name = ens_name || @verified_address
         {
           nickname: display_name,
@@ -79,55 +76,12 @@ module OmniAuth
 
       private
 
-      def rpc_url
-        url = SiteSetting.siwe_ethereum_rpc_url rescue nil
-        url if url && !url.empty?
-      end
-
-      # Build a reusable HTTP connection to the configured RPC endpoint.
-      def rpc_connection
-        uri = URI(rpc_url)
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = uri.scheme == 'https'
-        http.open_timeout = 10
-        http.read_timeout = 10
-        http
-      end
-
-      # Generic JSON-RPC eth_call. Returns hex result without 0x prefix, or nil.
-      # When +to+ is nil the call simulates contract creation (used by EIP-6492).
-      # Accepts an optional +http+ connection for reuse across sequential calls.
-      def eth_call(to, data, http: nil)
-        return nil unless rpc_url
-
-        http ||= rpc_connection
-        path = URI(rpc_url).path
-        path = '/' if path.empty?
-        req = Net::HTTP::Post.new(path, 'Content-Type' => 'application/json')
-        call_params = { data: data }
-        call_params[:to] = to if to
-        req.body = {
-          jsonrpc: "2.0",
-          method: "eth_call",
-          params: [call_params, "latest"],
-          id: 1
-        }.to_json
-
-        response = http.request(req)
-        result = JSON.parse(response.body)
-        return nil if result['error'] || result['result'].nil? || result['result'] == '0x'
-
-        Eth::Util.remove_hex_prefix(result['result'])
-      rescue StandardError
-        nil
-      end
-
       # Universal smart-wallet signature verification using the EIP-6492
       # off-chain validator. A single eth_call (contract creation simulation)
       # that handles deployed EIP-1271 wallets (e.g. Safe) AND undeployed
       # ERC-4337 accounts (e.g. Coinbase Smart Wallet) in one shot.
       def smart_wallet_valid?(siwe_message, signature)
-        return false unless rpc_url
+        return false unless DiscourseSiwe::EthRpc.rpc_url
 
         # Hash the message the same way personal_sign does (EIP-191)
         prefixed = Eth::Signature.prefix_message(siwe_message.prepare_message)
@@ -145,93 +99,11 @@ module OmniAuth
         data = "0x#{EIP6492_VALIDATOR_BYTECODE}#{address_param}#{hash_param}#{bytes_offset}#{sig_length}#{sig_padded}"
 
         # eth_call with no 'to' simulates contract creation
-        result = eth_call(nil, data)
+        result = DiscourseSiwe::EthRpc.eth_call(nil, data)
         return false if result.nil?
 
         # Validator returns 0x01 (possibly zero-padded to 32 bytes) for valid
         result.gsub(/\A0+/, '') == '1'
-      end
-
-      # Compute ENS namehash for a domain name
-      def ens_namehash(name)
-        node = "\x00" * 32
-        unless name.nil? || name.empty?
-          name.split('.').reverse.each do |label|
-            label_hash = Eth::Util.keccak256(label)
-            node = Eth::Util.keccak256(node + label_hash)
-          end
-        end
-        Eth::Util.bin_to_hex(node)
-      end
-
-      # Decode an ABI-encoded address return value
-      def abi_decode_address(hex)
-        return nil if hex.nil? || hex.length < 40
-        address = hex[-40, 40]
-        return nil if address == '0' * 40
-        "0x#{address}"
-      end
-
-      # Decode an ABI-encoded string return value
-      def abi_decode_string(hex)
-        return nil if hex.nil? || hex.length < 128
-        offset = hex[0, 64].to_i(16) * 2
-        length = hex[offset, 64].to_i(16)
-        return '' if length == 0
-        data_start = offset + 64
-        return nil if hex.length < data_start + length * 2
-        [hex[data_start, length * 2]].pack('H*').force_encoding('UTF-8')
-      end
-
-      # Resolve ENS name and avatar for an Ethereum address.
-      # Returns [name, avatar_url] or [nil, nil].
-      def resolve_ens(address)
-        return [nil, nil] unless rpc_url
-
-        http = rpc_connection
-        http.start do
-          # Step 1: Reverse resolve address → name
-          addr_clean = Eth::Util.remove_hex_prefix(address).downcase
-          reverse_node = ens_namehash("#{addr_clean}.addr.reverse")
-
-          # Get resolver for the reverse node from ENS registry
-          resolver_hex = eth_call(ENS_REGISTRY, "0x0178b8bf#{reverse_node}", http: http)
-          resolver = abi_decode_address(resolver_hex)
-          return [nil, nil] unless resolver
-
-          # Get the name from the reverse resolver
-          name_hex = eth_call(resolver, "0x691f3431#{reverse_node}", http: http)
-          name = abi_decode_string(name_hex)
-          return [nil, nil] if name.nil? || name.empty?
-
-          # Step 2: Forward verify — resolve name back to address to prevent spoofing
-          forward_node = ens_namehash(name)
-          fwd_resolver_hex = eth_call(ENS_REGISTRY, "0x0178b8bf#{forward_node}", http: http)
-          fwd_resolver = abi_decode_address(fwd_resolver_hex)
-          return [nil, nil] unless fwd_resolver
-
-          addr_hex = eth_call(fwd_resolver, "0x3b3b57de#{forward_node}", http: http)
-          resolved_addr = abi_decode_address(addr_hex)
-          return [nil, nil] unless resolved_addr&.downcase == address.downcase
-
-          [name, ens_avatar_url(name)]
-        end
-      rescue StandardError
-        [nil, nil]
-      end
-
-      # Returns the ENS metadata avatar URL if it exists, nil otherwise.
-      def ens_avatar_url(name)
-        url = "https://metadata.ens.domains/mainnet/avatar/#{name}"
-        uri = URI(url)
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = true
-        http.open_timeout = 5
-        http.read_timeout = 5
-        response = http.request(Net::HTTP::Head.new(uri.path))
-        response.code.to_i == 200 ? url : nil
-      rescue StandardError
-        nil
       end
     end
   end

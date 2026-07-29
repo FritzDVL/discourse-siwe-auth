@@ -35,5 +35,32 @@ module DiscourseSiwe
 
       render json: { message: message.prepare_message }
     end
+
+    IDENTITIES = %w[wallet ens society].freeze
+
+    def update_identity
+      raise Discourse::NotLoggedIn unless current_user
+
+      preferred = params[:preferred_identity]
+      unless IDENTITIES.include?(preferred)
+        return render json: { error: 'Invalid identity type' }, status: 400
+      end
+
+      cf = current_user.custom_fields
+      case preferred
+      when 'ens'
+        return render json: { error: 'No ENS name available' }, status: 400 if cf['ens_name'].blank?
+      when 'society'
+        return render json: { error: 'No Society identity available' }, status: 400 if cf['society_badge_id'].blank?
+      end
+
+      cf['preferred_identity'] = preferred
+      current_user.save_custom_fields
+
+      DiscourseSiwe::DisplayNameApplier.apply(current_user)
+      current_user.save!
+
+      render json: { success: true, preferred_identity: preferred }
+    end
   end
 end

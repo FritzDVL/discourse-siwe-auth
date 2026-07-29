@@ -1,0 +1,29 @@
+{{#if identities.length}}
+  <div class="control-group siwe-identity-selector">
+    <label class="control-label">
+      {{i18n "discourse_siwe.identity.title"}}
+    </label>
+    <div class="controls">
+      {{#each identities as |identity|}}
+        <label class="identity-option">
+          {{radio-button
+            value=identity.id
+            selection=model.web3_identities.preferred_identity
+            onChange=(action "selectIdentity" identity.id)
+          }}
+          <span class="identity-name">{{identity.label}}</span>
+          <span class="identity-source">
+            {{i18n (concat "discourse_siwe.identity.source." identity.sourceKey)}}
+          </span>
+          {{#if identity.avatar}}
+            <img
+              src={{identity.avatar}}
+              class="identity-preview"
+              alt=""
+            />
+          {{/if}}
+        </label>
+      {{/each}}
+    </div>
+  </div>
+{{/if}}
