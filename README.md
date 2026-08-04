@@ -1,11 +1,27 @@
 # Sign-In with Ethereum for Discourse
 
-A Discourse plugin that lets users authenticate with their Ethereum wallet using
-the [Sign-In with Ethereum (SIWE)](https://login.xyz) standard. Injected wallets
-(MetaMask, Safe, etc.) work out of the box. ENS names and avatars are resolved
-server-side when an RPC endpoint is configured, and users with a
-[Society Protocol](https://societyprotocol.io/) profile badge can choose whether
-to display their wallet, ENS name, or Society identity.
+A Discourse plugin that authenticates users with their Ethereum wallet using the
+[Sign-In with Ethereum (SIWE)](https://login.xyz) standard, then lets them choose
+how their profile appears in the forum.
+
+This is the maintained fork used by Society Protocol. It started from
+[`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth)
+and was extended with server-side ENS resolution, EIP-1271 / EIP-6492 smart
+contract wallet support, and Society Protocol profile-badge integration, plus
+a set of fixes required for current Discourse and Ruby 3.4.
+
+What users experience:
+
+- Injected wallets (MetaMask, Safe, etc.) work out of the box.
+- WalletConnect / Reown works when a project ID is configured.
+- If an Ethereum RPC URL is supplied, the plugin resolves ENS names and avatars
+  server-side and suggests the ENS name as the default username for new sign-ups.
+- If Society Protocol resolution is enabled, the plugin also resolves the user's
+  Society profile badge and lets the user pick their display identity:
+  **wallet**, **ENS**, or **Society**.
+
+The chosen display identity updates the user's visible name and avatar in
+Discourse; the underlying username is never changed by this feature.
 
 > **About this fork.** This is a fork of
 > [`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth)
@@ -43,7 +59,7 @@ hooks:
       cd: $home/plugins
       cmd:
         - sudo -E -u discourse git clone https://github.com/discourse/docker_manager.git
-        - sudo -E -u discourse git clone https://github.com/FritzDVL/discourse-siwe-auth.git # <-- added
+        - sudo -E -u discourse git clone https://github.com/SocietyProtocol/discourse-siwe-auth.git # <-- added
 ```
 
 ### Why both hooks are needed
@@ -123,7 +139,7 @@ as the `version` argument, producing:
 
 ```
 ERROR:  While executing gem ... (Gem::Requirement::BadRequirementError)
-    Illformed requirement ["{require:"]
+    Illformed requirement ["{"]
 ```
 
 Every gem line in `plugin.rb` therefore now carries an explicit version
@@ -190,15 +206,15 @@ required (see [Installation](#installation) above).
 
 ## Tests
 
-The plugin includes unit and integration tests for ENS resolution helpers and
-EIP-6492 smart wallet signature verification.
+The plugin includes standalone minitest unit and integration scripts for ENS
+resolution and Society Protocol resolution. These run outside the full Discourse
+suite.
 
 ### Unit tests (no network needed)
 
 ```bash
 ruby test/ens_unit_test.rb
 ruby test/society_unit_test.rb
-ruby test/smart_wallet_unit_test.rb
 ```
 
 ### Integration tests (require an Ethereum RPC endpoint)
@@ -206,7 +222,6 @@ ruby test/smart_wallet_unit_test.rb
 ```bash
 ruby test/ens_integration_test.rb
 ruby test/society_integration_test.rb
-ruby test/smart_wallet_integration_test.rb
 ```
 
 By default, integration tests use a public RPC. Set `RPC_URL` for a dedicated
@@ -234,24 +249,41 @@ for f in test/*_test.rb; do ruby "$f"; done
 ## How it works
 
 When a user clicks the Ethereum login button, the plugin opens a dedicated
-authentication. The user connects their wallet, signs a SIWE message,
-and is authenticated via an OmniAuth strategy on the server side.
+authentication page. The user connects their wallet, signs a SIWE message,
+and is authenticated via the OmniAuth strategy on the server side.
 
-After first sign-in, users are asked to associate an email address with their
-account. If an RPC URL is configured and the connected address has an ENS name,
-the name is resolved and verified server-side and suggested as the default
-username. ENS avatars are fetched via the ENS metadata service and used as the
-profile photo.
+### Sign-up path
 
-If Society Protocol resolution is enabled, the plugin also resolves any profile
-badge linked to the wallet (via the Society subgraph or direct RPC). After
-sign-up, users can choose their preferred display identity — wallet, ENS, or
-Society — from **Preferences > Profile**. The chosen name and avatar are applied
-to the Discourse profile immediately; the username itself is never changed by
-this feature.
+For a brand-new account, the plugin resolves available identities and stores
+them in user custom fields:
 
-Alternatively, existing users can connect their Ethereum accounts via
-their profile settings.
+- `wallet_address` — the verified Ethereum address.
+- `ens_name` / `ens_avatar` — resolved server-side if an RPC URL is configured.
+  The ENS name is suggested as the default username; the ENS avatar is fetched
+  from the ENS metadata service.
+- `society_badge_id` / `society_name` / `society_avatar` / `society_bio` —
+  resolved from Society Protocol using the configured subgraph (default) or
+  direct RPC fallback.
+
+A default `preferred_identity` is chosen automatically: Society if available,
+otherwise ENS, otherwise wallet. `DisplayNameApplier` then applies it to
+`user.name` and enqueues an avatar download if an avatar URL is present. The
+Discourse username itself is never rewritten after account creation.
+
+### Existing-user login path
+
+For returning users, the login path does not block on network calls. It only
+cheaply refreshes ENS from the already-resolved `auth_token.info` and queues a
+throttled `RefreshSiweIdentity` background job to update Society data at most
+once every 24 hours. This keeps logins fast even if Society Protocol's
+subgraph or RPC is slow or unavailable.
+
+### Display-identity toggle
+
+Users with more than one available identity can switch at any time from
+**Preferences > Profile**. The `update_identity` endpoint validates the choice
+(e.g. rejecting Society if no badge exists), persists the new preference, and
+re-applies `DisplayNameApplier`. On failure, the UI reverts the selection.
 
 ### Backfilling existing users
 
