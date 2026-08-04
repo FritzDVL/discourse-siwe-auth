@@ -187,7 +187,7 @@ after_initialize do
   load File.expand_path('../app/controllers/discourse_siwe/auth_controller.rb', __FILE__)
   load File.expand_path('../app/jobs/regular/refresh_siwe_identity.rb', __FILE__)
 
-  IdentityStore::FIELDS.each do |field|
+  DiscourseSiwe::IdentityStore::FIELDS.each do |field|
     User.register_custom_field_type(field, :string)
   end
 

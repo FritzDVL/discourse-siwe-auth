@@ -204,6 +204,14 @@ container rebuilds:
 the `before_code: gem install rubyzip` hook in `app.yml` is still
 required (see [Installation](#installation) above).
 
+> **Local development note:** the `before_code` hook only runs during
+> `./launcher rebuild app`. If you run Discourse locally outside the Docker
+> bootstrap (e.g. `d/rails s` in a dev setup), install rubyzip once by hand
+> (`gem install rubyzip`) so `rbsecp256k1`'s native build can find it.
+> Do **not** work around this by declaring `gem 'rubyzip', ...` in
+> `plugin.rb` — that reintroduces the activation conflict with Discourse's
+> bundled rubyzip 3.x described above.
+
 ## Tests
 
 The plugin includes standalone minitest unit and integration scripts for ENS
@@ -303,3 +311,77 @@ bundle exec rake siwe:migrate_identities[true]
 The task resolves ENS and Society identities, sets the default preference, and
 stores the result in user custom fields. Existing display names are left
 untouched unless the user toggles their preferred identity.
+
+## Troubleshooting and engineering notes
+
+This section captures the issues hit during the first deployment and the
+information needed to debug or resume work on another machine.
+
+### Boot-time issues encountered
+
+1. **Missing `rubyzip` during C-extension build**
+   - Symptom: `rbsecp256k1` fails to compile, complaining that `zip` or
+     `rubyzip` is missing.
+   - Fix: the `before_code: gem install rubyzip` hook in `app.yml` handles this
+     during `./launcher rebuild app`. When running Discourse outside that flow
+     (e.g. `d/rails s` in a dev environment), install it once by hand:
+     `gem install rubyzip`.
+   - Do **not** add `gem 'rubyzip', '2.3.2'` to `plugin.rb` — Discourse's main
+     bundle activates rubyzip 3.x and that declaration would cause a
+     `Gem::ConflictError` at boot.
+
+2. **`uninitialized constant IdentityStore` in `plugin.rb`**
+   - Symptom: `NameError: uninitialized constant IdentityStore` during Discourse
+     boot.
+   - Fix (already applied): reference the namespaced constant:
+     `DiscourseSiwe::IdentityStore::FIELDS.each { ... }`.
+
+3. **`DiscourseSIWE` vs `DiscourseSiwe` namespace mismatch**
+   - The repo is consistent and uses `DiscourseSiwe`. If you see this error in a
+     local copy, check that every file uses the same PascalCase (`DiscourseSiwe`)
+     and not an all-caps `SIWE` variant.
+
+4. **Calling `.each` on the module instead of the constant array**
+   - Same root cause as #2: `IdentityStore::FIELDS` was missing the module
+     prefix, so Ruby resolved `IdentityStore` to the module object. Fixing the
+     namespace also fixes this.
+
+### Wallet sign-in error: "... does not match current domain"
+
+If the wallet (e.g. MetaMask) refuses to sign and shows a message like
+`https://localhost:3000 does not match current domain`, it is MetaMask's SIWE
+anti-phishing protection ([MetaMask issue #18191](https://github.com/MetaMask/metamask-extension/issues/18191)).
+MetaMask verifies that the EIP-4361 message's `domain` and `URI` exactly match
+the page origin that requested the signature.
+
+The server builds the SIWE message from `Discourse.base_url`
+(`app/controllers/discourse_siwe/auth_controller.rb`). The mismatch means the
+browser origin does not equal Discourse's configured base URL. Common causes:
+
+- Browsing `https://localhost:3000` while Discourse is configured as
+  `http://localhost:3000` (or `force_https` is off).
+- A port mismatch — e.g. an Ember CLI proxy on `:4200` while the backend base
+  URL is `:3000`.
+- Hostname mismatch — `127.0.0.1` vs `localhost`, or a tunnel/domain not listed
+  in `DISCOURSE_HOSTNAME`.
+
+Fix: browse Discourse at the exact URL it is configured for, or adjust
+`DISCOURSE_HOSTNAME` / `force_https` to match the real access URL.
+
+### Information to collect when debugging sign-in
+
+To continue debugging on a different machine, gather:
+
+1. The SIWE message text (copy it from the wallet prompt or fetch it with
+   `curl "https://HOST/discourse-siwe/message?eth_account=0x...&chain_id=1"`).
+   Look at the `domain` and `URI:` lines.
+2. The exact URL in the browser's address bar when the sign-in button is clicked.
+3. How Discourse is being run (`d/rails s`, `./launcher`, port, HTTPS on/off) and
+   the values of `DISCOURSE_HOSTNAME` and `force_https`.
+4. The browser console output (full error) and the Network tab entries for
+   `/discourse-siwe/message` and the final OmniAuth callback POST.
+5. The relevant `log/development.log` lines around the callback — the strategy
+   logs failure reasons such as `invalid_nonce`, `expired_message`, or
+   `invalid_signature`.
+
+With #1 and #2 the exact mismatch can usually be identified immediately.
