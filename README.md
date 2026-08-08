@@ -293,6 +293,10 @@ Users with more than one available identity can switch at any time from
 (e.g. rejecting Society if no badge exists), persists the new preference, and
 re-applies `DisplayNameApplier`. On failure, the UI reverts the selection.
 
+Because the profile page's plugin outlet is at the bottom of the form, a small
+initializer (`assets/javascripts/discourse/initializers/siwe-identity-reposition.js.es6`)
+moves the selector to the top of the profile section after render.
+
 ### Backfilling existing users
 
 After deploying the plugin, run the rake task to backfill custom fields for
