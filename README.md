@@ -1,14 +1,32 @@
-# Sign-In with Ethereum for Discourse
+# Web3 Outpost sign-in for Discourse
 
-A Discourse plugin that authenticates users with their Ethereum wallet using the
-[Sign-In with Ethereum (SIWE)](https://login.xyz) standard, then lets them choose
-how their profile appears in the forum.
+A Discourse plugin by [Society Protocol](https://societyprotocol.io/) that lets
+forum members sign in with their Ethereum wallet and show up in the community
+with their **web3 identity** — their wallet address, their ENS name, or their
+Society Protocol outpost profile.
 
-This is the maintained fork used by Society Protocol. It started from
-[`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth)
-and was extended with server-side ENS resolution, EIP-1271 / EIP-6492 smart
-contract wallet support, and Society Protocol profile-badge integration, plus
-a set of fixes required for current Discourse and Ruby 3.4.
+## What this plugin is
+
+This project started as a fork of
+[`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth),
+the reference [Sign-In with Ethereum (SIWE)](https://login.xyz) plugin for
+Discourse. We turned it into Society Protocol's own plugin by extending it in
+three directions:
+
+1. **Web3 identities, not just authentication.** Beyond logging users in, the
+   plugin resolves every identity attached to the signing wallet — ENS name and
+   avatar (resolved server-side) and the wallet's Society Protocol outpost
+   profile (name, bio, avatar, badge) — and stores them on the Discourse
+   account.
+2. **A display-identity toggle.** Users choose, from **Preferences > Profile**,
+   which identity represents them in the forum: wallet, ENS, or Society
+   Protocol outpost. The choice updates their visible name and avatar across
+   the site. The selector is shown at the top of the profile section.
+3. **Production-grade robustness.** Smart contract wallet support
+   (EIP-1271 / EIP-6492, e.g. Safe and Coinbase Smart Wallet), a throttled
+   background refresh so logins never block on external APIs, a backfill rake
+   task for existing users, and fixes for installing on current Discourse
+   with Ruby 3.4 (see [Compatibility notes](#compatibility-notes-discourse--ruby-34)).
 
 What users experience:
 
@@ -17,19 +35,17 @@ What users experience:
 - If an Ethereum RPC URL is supplied, the plugin resolves ENS names and avatars
   server-side and suggests the ENS name as the default username for new sign-ups.
 - If Society Protocol resolution is enabled, the plugin also resolves the user's
-  Society profile badge and lets the user pick their display identity:
-  **wallet**, **ENS**, or **Society**.
+  Society outpost profile and lets the user pick their display identity:
+  **wallet**, **ENS**, or **Society Protocol**.
 
 The chosen display identity updates the user's visible name and avatar in
 Discourse; the underlying username is never changed by this feature.
 
-> **About this fork.** This is a fork of
-> [`signinwithethereum/discourse-siwe-auth`](https://github.com/signinwithethereum/discourse-siwe-auth)
-> that fixes three install-time issues blocking installation on current Discourse
-> (which now ships Ruby 3.4 inside the official `discourse/base` Docker image).
-> See [Compatibility notes](#compatibility-notes-discourse--ruby-34) below.
-> Tracking issue upstream:
-> [signinwithethereum/discourse-siwe-auth#2](https://github.com/signinwithethereum/discourse-siwe-auth/issues/2).
+> **Fork note.** This repo tracks the fixes we contributed back upstream
+> ([signinwithethereum/discourse-siwe-auth#2](https://github.com/signinwithethereum/discourse-siwe-auth/issues/2))
+> for installing on current Discourse, which ships Ruby 3.4 inside the official
+> `discourse/base` Docker image. See
+> [Compatibility notes](#compatibility-notes-discourse--ruby-34) below.
 
 ## Requirements
 
@@ -389,3 +405,7 @@ To continue debugging on a different machine, gather:
    `invalid_signature`.
 
 With #1 and #2 the exact mismatch can usually be identified immediately.
+
+## License
+
+MIT / Apache-2.0, same as upstream. See `LICENSE-MIT` and `LICENSE-APACHE`.

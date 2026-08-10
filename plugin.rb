@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# name: discourse-siwe-auth
-# about: Authenticate users via Sign In with Ethereum (SIWE), with optional Society Protocol identity resolution
-# version: 1.3.0
-# authors: EthID
-# url: https://siwe.xyz
+# name: Web3 Outpost sign-in for Discourse
+# about: Sign in with Ethereum and display your web3 identity (wallet, ENS, or Society Protocol outpost) in Discourse. Forked and extended from signinwithethereum/discourse-siwe-auth by Society Protocol.
+# version: 1.4.0
+# authors: Society Protocol
+# url: https://github.com/SocietyProtocol/discourse-siwe-auth
 
 enabled_site_setting :discourse_siwe_enabled
 register_svg_icon 'fab-ethereum'
