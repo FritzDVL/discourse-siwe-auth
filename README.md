@@ -132,6 +132,7 @@ WalletConnect / Reown project ID. Without a project ID, only injected wallets
 | **Siwe society subgraph url** | _Optional._ The Society Protocol subgraph endpoint. Defaults to the live mainnet endpoint; leave blank to force direct RPC resolution. |
 | **Siwe society badges contract** | Society Protocol Badges (ERC-1155) contract address. Defaults to the current mainnet proxy; update only if the contract is redeployed. |
 | **Siwe identity resolution mode** | Preferred resolution mode: `subgraph` (default, falls back to RPC) or `rpc` (direct contract calls only). |
+| **Siwe society group mapping** | Token-gating mapping: `badge_id:group_name\|badge_id:group_name`. Example: `13:governors\|25:core-team\|28:moderators`. Leave blank to disable group sync. |
 
 ## Compatibility notes (Discourse + Ruby 3.4)
 
@@ -313,10 +314,58 @@ Because the profile page's plugin outlet is at the bottom of the form, a small
 initializer (`assets/javascripts/discourse/initializers/siwe-identity-reposition.js.es6`)
 moves the selector to the top of the profile section after render.
 
+### Token gating with Society badges
+
+The plugin can map Society Protocol ERC-1155 badges to Discourse groups. When a
+user logs in, their wallet is resolved against the subgraph, every badge they
+hold is stored, and their group memberships are synced automatically.
+
+To enable it, set **Siwe society group mapping** to pairs of `badge_id:group_name`
+separated by `|`:
+
+```text
+13:governors|25:core-team|28:moderators
+```
+
+Each mapped group must already exist in Discourse and should be a **manual**
+(not automatic/trust-level) group. Configure the group's flair image, title, and
+color to visually represent the badge on posts.
+
+Membership changes are applied at the next identity refresh (account creation
+or login, at most once every 24 hours), not in real time. A user who receives a
+badge gets group access when they next log in; a user who loses a badge is
+removed from the group when the refresh runs. To force a full re-sync for every
+SIWE user, run the migration task with the `force` flag (see below).
+
+#### Official Society badge registry
+
+The Society Protocol Badges contract exposes official badge IDs for Society's
+own forum roles. IDs 17–23 do not currently exist on-chain, so the registry is
+non-contiguous:
+
+| Badge ID | Name | Typical forum use |
+| --- | --- | --- |
+| 11 | SP DAO | DAO members |
+| 12 | Security Council | Security council |
+| 13 | Governor | Governors |
+| 14 | Bronze VIP | Bronze VIP tier |
+| 15 | Silver VIP | Silver VIP tier |
+| 16 | Gold VIP | Gold VIP tier |
+| 24 | Advisor | Advisors |
+| 25 | Core Team | Core team |
+| 26 | Contributor | Contributors |
+| 27 | ICO Participant | ICO participants |
+| 28 | Moderator | Moderators |
+
+The mechanism is generic: community badges (issued by external communities
+through the Web3 Outpost) also appear in `user.badges` and can be mapped the
+same way. A future phase will add a no-code admin UI so external communities can
+gate their own forums on any token contract without editing code.
+
 ### Backfilling existing users
 
-After deploying the plugin, run the rake task to backfill custom fields for
-existing SIWE users:
+After deploying the plugin, run the rake task to backfill custom fields, group
+memberships, and default display identity for existing SIWE users:
 
 ```bash
 bundle exec rake siwe:migrate_identities
@@ -328,9 +377,19 @@ Dry-run first:
 bundle exec rake siwe:migrate_identities[true]
 ```
 
-The task resolves ENS and Society identities, sets the default preference, and
-stores the result in user custom fields. Existing display names are left
-untouched unless the user toggles their preferred identity.
+To re-sync users who were already migrated — for example, after changing the
+badge-to-group mapping — add the `force` flag:
+
+```bash
+bundle exec rake siwe:migrate_identities[true,true]
+```
+
+(`true` for dry-run, `true` for force.)
+
+The task resolves ENS and Society identities, sets the default preference,
+syncs mapped group memberships, and stores the result in user custom fields.
+Existing display names are left untouched unless the user toggles their preferred
+identity.
 
 ## Troubleshooting and engineering notes
 

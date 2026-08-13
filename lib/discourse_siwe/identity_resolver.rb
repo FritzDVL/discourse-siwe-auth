@@ -4,8 +4,9 @@ require 'net/http'
 require 'json'
 
 module DiscourseSiwe
-  # Resolves a Society Protocol profile badge for an Ethereum address.
-  # Uses the configured subgraph by default and falls back to direct RPC calls.
+  # Resolves a Society Protocol profile badge and all held badges for an
+  # Ethereum address. Uses the configured subgraph by default and falls back
+  # to direct RPC calls (RPC path only resolves the profile badge).
   # Every failure path returns nil so login is never blocked.
   class IdentityResolver
     # Standard ERC-1155 selectors.
@@ -31,6 +32,15 @@ module DiscourseSiwe
             imageUrl
             uri
           }
+          badges {
+            id
+            name
+            description
+            imageUrl
+            isOfficial
+            isCommunity
+            isProfile
+          }
         }
       }
     GRAPHQL
@@ -43,7 +53,7 @@ module DiscourseSiwe
       @wallet_address = wallet_address.to_s.downcase
     end
 
-    # Returns { badge_id:, name:, bio:, avatar:, uri: } or nil.
+    # Returns { badge_id:, name:, bio:, avatar:, uri:, badges: } or nil.
     def resolve
       return nil unless SiteSetting.siwe_society_enabled
       return nil unless @wallet_address.match?(/\A0x[0-9a-fA-F]{40}\z/)
@@ -81,6 +91,7 @@ module DiscourseSiwe
         bio:    first_non_empty(data['bio'], profile['description']),
         avatar: normalize_url(first_non_empty(data['imageUrl'], profile['imageUrl'])),
         uri:    profile['uri'],
+        badges: parse_badges(data['badges']),
       }
     rescue StandardError => e
       log_warn("[discourse-siwe-auth] Society subgraph error: #{e.message}")
@@ -126,6 +137,7 @@ module DiscourseSiwe
           bio:    meta&.dig('description'),
           avatar: normalize_url(meta&.dig('image')),
           uri:    metadata_uri,
+          badges: [],
         }
       end
     rescue StandardError => e
@@ -150,6 +162,24 @@ module DiscourseSiwe
     def normalize_url(url)
       return nil if url.to_s.strip.empty?
       url.start_with?('ipfs://') ? url.sub('ipfs://', 'https://ipfs.io/ipfs/') : url
+    end
+
+    def parse_badges(badges_data)
+      return [] unless badges_data.is_a?(Array)
+
+      badges_data.filter_map do |b|
+        next unless b.is_a?(Hash) && b['id'].present?
+
+        {
+          id: b['id'].to_s,
+          name: b['name'].to_s,
+          description: b['description'].to_s,
+          image_url: normalize_url(b['imageUrl']),
+          official: b['isOfficial'] == true,
+          community: b['isCommunity'] == true,
+          profile: b['isProfile'] == true,
+        }
+      end
     end
 
     def first_non_empty(*values)

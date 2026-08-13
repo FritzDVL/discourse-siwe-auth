@@ -21,3 +21,5 @@ discourse_siwe:
     choices:
       - subgraph
       - rpc
+  siwe_society_group_mapping:
+    default: ''

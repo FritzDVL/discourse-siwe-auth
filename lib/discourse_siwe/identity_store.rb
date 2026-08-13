@@ -9,6 +9,7 @@ module DiscourseSiwe
     FIELDS = %w[
       wallet_address ens_name ens_avatar
       society_badge_id society_name society_avatar society_bio
+      society_badges
       preferred_identity society_resolved_at
     ].freeze
 
@@ -17,6 +18,7 @@ module DiscourseSiwe
       user.custom_fields['society_name']    = society&.[](:name)
       user.custom_fields['society_avatar']  = society&.[](:avatar)
       user.custom_fields['society_bio']     = society&.[](:bio)
+      user.custom_fields['society_badges']  = (society&.[](:badges) || []).to_json
       user.custom_fields['society_resolved_at'] = Time.now.utc.iso8601
     end
 
@@ -37,8 +39,19 @@ module DiscourseSiwe
         society_name: cf['society_name'],
         society_avatar: cf['society_avatar'],
         society_bio: cf['society_bio'],
+        society_badges: society_badges(user),
         preferred_identity: cf['preferred_identity'] || 'wallet',
       }
+    end
+
+    def society_badges(user)
+      raw = user.custom_fields['society_badges']
+      return [] if raw.to_s.strip.empty?
+
+      parsed = JSON.parse(raw)
+      parsed.is_a?(Array) ? parsed : []
+    rescue JSON::ParserError, TypeError
+      []
     end
 
     def society_stale?(user)

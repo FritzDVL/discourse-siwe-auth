@@ -15,6 +15,8 @@ module Jobs
       society = DiscourseSiwe::IdentityResolver.resolve(wallet)
       DiscourseSiwe::IdentityStore.store_society(user, society)
       user.save_custom_fields
+
+      DiscourseSiwe::BadgeGroupSync.sync(user)
     end
   end
 end
