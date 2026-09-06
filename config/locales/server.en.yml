@@ -9,3 +9,6 @@ en:
     siwe_society_badges_contract: 'Society Protocol Badges (ERC-1155) contract address'
     siwe_identity_resolution_mode: 'Preferred resolution mode for Society Protocol identities'
     siwe_society_group_mapping: 'Badge-to-group mapping for token gating (format: badge_id:group_name|badge_id:group_name)'
+    siwe_voting_enabled: 'Enable off-chain native token voting for topics tagged with the voting tag'
+    siwe_voting_chain_id: 'Ethereum chain ID used for EIP-712 voting domain (1 for Ethereum Mainnet)'
+    siwe_voting_tag: 'Topic tag that activates native token voting (default: governance)'

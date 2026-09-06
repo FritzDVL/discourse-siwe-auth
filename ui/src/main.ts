@@ -2,11 +2,20 @@ import { createApp, h } from 'vue'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { WagmiPlugin } from '@wagmi/vue'
 import globalStyles from '@1001-digital/styles?inline'
-import { Globals, defaultIconAliases, IconAliasesKey } from '@1001-digital/components'
+import {
+  Globals,
+  defaultIconAliases,
+  IconAliasesKey,
+} from '@1001-digital/components'
 import { EvmConfigKey } from '@1001-digital/components.evm'
 import SiweAuth from './SiweAuth.vue'
 import { createWagmiConfig } from './wagmi'
-import { createShadowRoot, injectStyles, captureDevStyles, getHostCSSOverrides } from './shadow'
+import {
+  createShadowRoot,
+  injectStyles,
+  captureDevStyles,
+  getHostCSSOverrides,
+} from './shadow'
 
 // In production, the cssToShadow Vite plugin prepends extracted component
 // CSS as `var __siwe_css__` to the IIFE bundle. We reference it here.
@@ -84,5 +93,77 @@ export function mountSiwe(el: string | HTMLElement, options: SiweOptions) {
   }
 }
 
+import { signTypedData, getAccount, reconnect } from '@wagmi/core'
+
+export interface VotePayload {
+  topicId: number
+  choice: number[]
+  timestamp: number
+  chainId?: number
+  walletConnectProjectId?: string
+}
+
+export async function signVotePayload(
+  payload: VotePayload,
+): Promise<{ signature: string; address: string }> {
+  const config = createWagmiConfig({
+    walletConnectProjectId: payload.walletConnectProjectId,
+  })
+
+  let account = getAccount(config)
+  if (!account.isConnected) {
+    try {
+      await reconnect(config)
+      account = getAccount(config)
+    } catch {
+      // Continue if user prompts connection
+    }
+  }
+
+  const domain = {
+    name: 'Society Protocol Governance',
+    version: '1',
+    chainId: payload.chainId || 1,
+  } as const
+
+  const types = {
+    Vote: [
+      { name: 'topicId', type: 'uint256' },
+      { name: 'choice', type: 'uint256[]' },
+      { name: 'timestamp', type: 'uint256' },
+    ],
+  } as const
+
+  const signature = await signTypedData(config, {
+    domain,
+    types,
+    primaryType: 'Vote',
+    message: {
+      topicId: BigInt(payload.topicId),
+      choice: payload.choice.map((c) => BigInt(c)),
+      timestamp: BigInt(payload.timestamp),
+    },
+  })
+
+  return {
+    signature,
+    address: account.address || '',
+  }
+}
+
+export function getConnectedAddress(
+  walletConnectProjectId?: string,
+): string | undefined {
+  const config = createWagmiConfig({ walletConnectProjectId })
+  const account = getAccount(config)
+  return account.address
+}
+
 // Expose globally for Discourse's loadScript() usage
 ;(window as any).mountSiwe = mountSiwe
+;(window as any).SiweAuth = {
+  mountSiwe,
+  signVotePayload,
+  getConnectedAddress,
+  createWagmiConfig,
+}

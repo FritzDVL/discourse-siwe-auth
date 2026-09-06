@@ -188,6 +188,11 @@ after_initialize do
   load File.expand_path('../lib/discourse_siwe/badge_group_sync.rb', __FILE__)
   load File.expand_path('../app/controllers/discourse_siwe/auth_controller.rb', __FILE__)
   load File.expand_path('../app/jobs/regular/refresh_siwe_identity.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/eip712.rb', __FILE__)
+  load File.expand_path('../lib/discourse_siwe/voting_strategy.rb', __FILE__)
+  load File.expand_path('../app/models/sp_proposal.rb', __FILE__)
+  load File.expand_path('../app/models/sp_vote.rb', __FILE__)
+  load File.expand_path('../app/controllers/discourse_siwe/voting_controller.rb', __FILE__)
 
   DiscourseSiwe::IdentityStore::FIELDS.each do |field|
     User.register_custom_field_type(field, :string)
@@ -206,5 +211,9 @@ after_initialize do
     get  '/discourse-siwe/auth'           => 'discourse_siwe/auth#index'
     get  '/discourse-siwe/message'        => 'discourse_siwe/auth#message'
     post '/discourse-siwe/update-identity' => 'discourse_siwe/auth#update_identity'
+
+    get  '/sp-voting/proposal/:topic_id'  => 'discourse_siwe/voting#show'
+    post '/sp-voting/proposal'            => 'discourse_siwe/voting#create_proposal'
+    post '/sp-voting/cast-vote'           => 'discourse_siwe/voting#cast_vote'
   end
 end

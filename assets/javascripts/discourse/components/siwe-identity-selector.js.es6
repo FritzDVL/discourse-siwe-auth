@@ -42,7 +42,10 @@ export default Component.extend({
   actions: {
     selectIdentity(identity) {
       if (this.saving) return
-      const previous = this.model && this.model.web3_identities && this.model.web3_identities.preferred_identity
+      const previous =
+        this.model &&
+        this.model.web3_identities &&
+        this.model.web3_identities.preferred_identity
       if (identity === previous) return
 
       this.set('saving', true)

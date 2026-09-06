@@ -45,8 +45,29 @@ module DiscourseSiwe
       }
     GRAPHQL
 
+    USER_AT_BLOCK_QUERY = <<~GRAPHQL
+      query GetUserAtBlock($id: ID!, $block: Int!) {
+        user(id: $id, block: { number: $block }) {
+          id
+          badges {
+            id
+            name
+            description
+            imageUrl
+            isOfficial
+            isCommunity
+            isProfile
+          }
+        }
+      }
+    GRAPHQL
+
     def self.resolve(wallet_address)
       new(wallet_address).resolve
+    end
+
+    def self.resolve_badges_at_block(wallet_address, block_number = nil)
+      new(wallet_address).resolve_badges_at_block(block_number)
     end
 
     def initialize(wallet_address)
@@ -66,7 +87,47 @@ module DiscourseSiwe
       end
     end
 
+    def resolve_badges_at_block(block_number = nil)
+      return [] unless SiteSetting.siwe_society_enabled
+      return [] unless @wallet_address.match?(/\A0x[0-9a-fA-F]{40}\z/)
+
+      if block_number && block_number.to_i > 0
+        badges = via_subgraph_at_block(block_number.to_i)
+        return badges if badges && !badges.empty?
+      end
+
+      # Fallback to current resolution badges
+      res = resolve
+      res&.dig(:badges) || []
+    end
+
     private
+
+    def via_subgraph_at_block(block_num)
+      return nil if SiteSetting.siwe_society_subgraph_url.to_s.strip.empty?
+
+      uri = URI(SiteSetting.siwe_society_subgraph_url)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = uri.scheme == 'https'
+      http.open_timeout = 10
+      http.read_timeout = 10
+
+      req = Net::HTTP::Post.new(
+        uri.path.empty? ? '/' : uri.path,
+        'Content-Type' => 'application/json'
+      )
+      req.body = { query: USER_AT_BLOCK_QUERY, variables: { id: @wallet_address, block: block_num } }.to_json
+
+      resp = http.request(req)
+      body = JSON.parse(resp.body)
+      data = body.dig('data', 'user')
+      return nil unless data
+
+      parse_badges(data['badges'])
+    rescue StandardError => e
+      log_warn("[discourse-siwe-auth] Society subgraph at block error: #{e.message}")
+      nil
+    end
 
     def via_subgraph
       uri = URI(SiteSetting.siwe_society_subgraph_url)

@@ -1,0 +1,121 @@
+{{#if this.proposal}}
+  <div class='sp-vote-widget'>
+    <div class='sp-vote-header'>
+      <div class='sp-vote-header-info'>
+        <span
+          class='sp-vote-badge {{if this.proposal.is_active "active" "closed"}}'
+        >
+          {{#if this.proposal.is_active}}
+            {{d-icon 'bolt'}}
+            Active Proposal
+          {{else}}
+            {{d-icon 'lock'}}
+            Voting Closed
+          {{/if}}
+        </span>
+        <span class='sp-vote-meta'>
+          Snapshot Block:
+          <strong>#{{this.proposal.snapshot_block}}</strong>
+        </span>
+      </div>
+      <h3 class='sp-vote-title'>{{this.proposal.title}}</h3>
+    </div>
+
+    {{#if this.errorMessage}}
+      <div class='sp-vote-alert error'>
+        {{d-icon 'exclamation-triangle'}}
+        <span>{{this.errorMessage}}</span>
+      </div>
+    {{/if}}
+
+    {{#if this.successMessage}}
+      <div class='sp-vote-alert success'>
+        {{d-icon 'check-circle'}}
+        <span>{{this.successMessage}}</span>
+      </div>
+    {{/if}}
+
+    <div class='sp-vote-options'>
+      {{#each this.tally.tallies as |opt|}}
+        <div
+          class='sp-vote-option
+            {{if (eq this.selectedChoice opt.index) "selected"}}
+            {{if (eq this.userVote.choice.[0] opt.index) "voted"}}'
+          {{action 'selectOption' opt.index}}
+        >
+          <div class='sp-vote-option-content'>
+            <div class='sp-vote-option-radio'>
+              <input
+                type='radio'
+                name='sp-vote-choice'
+                checked={{eq this.selectedChoice opt.index}}
+                disabled={{or this.hasVoted (not this.proposal.is_active)}}
+              />
+            </div>
+            <div class='sp-vote-option-label'>
+              <span>{{opt.label}}</span>
+              {{#if (eq this.userVote.choice.[0] opt.index)}}
+                <span class='sp-vote-user-badge'>{{d-icon 'check'}}
+                  Your Vote</span>
+              {{/if}}
+            </div>
+            <div class='sp-vote-option-stats'>
+              <span class='sp-vote-power'>{{opt.voting_power}} Power</span>
+              <span class='sp-vote-percent'>{{opt.percentage}}%</span>
+            </div>
+          </div>
+          <div class='sp-vote-progress-bar-bg'>
+            <div
+              class='sp-vote-progress-bar-fill'
+              style={{concat 'width: ' opt.percentage '%'}}
+            ></div>
+          </div>
+        </div>
+      {{/each}}
+    </div>
+
+    <div class='sp-vote-footer'>
+      <div class='sp-vote-user-status'>
+        {{#if this.userWallet}}
+          <div class='sp-vote-power-tag'>
+            {{d-icon 'shield-alt'}}
+            <span>Your Voting Power: <strong>{{this.userPower}}</strong></span>
+          </div>
+        {{else}}
+          <div class='sp-vote-anon-tag'>
+            {{d-icon 'info-circle'}}
+            <span>Please sign in with your Ethereum wallet to participate in
+              voting.</span>
+          </div>
+        {{/if}}
+      </div>
+
+      <div class='sp-vote-action'>
+        {{#if this.hasVoted}}
+          <button class='btn btn-primary btn-voted' disabled='disabled'>
+            {{d-icon 'check-double'}}
+            Vote Recorded
+          </button>
+        {{else if this.proposal.is_active}}
+          <button
+            class='btn btn-primary btn-cast-vote'
+            disabled={{not this.canVote}}
+            {{action 'castVote'}}
+          >
+            {{#if this.submitting}}
+              {{d-icon 'spinner' class='spin'}}
+              Signing in Wallet...
+            {{else}}
+              {{d-icon 'file-signature'}}
+              Sign & Cast Vote
+            {{/if}}
+          </button>
+        {{else}}
+          <button class='btn btn-default' disabled='disabled'>
+            Voting Ended
+          </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+{{/if}}

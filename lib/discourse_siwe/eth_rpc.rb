@@ -2,7 +2,11 @@
 
 require 'net/http'
 require 'json'
-require 'digest/keccak'
+begin
+  require 'digest/keccak'
+rescue LoadError
+  # Loaded by Discourse runtime via plugin.rb
+end
 
 module DiscourseSiwe
   # Reusable Ethereum JSON-RPC helpers used by the SIWE strategy, ENS resolver,
@@ -26,7 +30,8 @@ module DiscourseSiwe
 
     # Generic eth_call. Returns hex result without 0x prefix, or nil.
     # `to` may be nil for contract-creation simulation (used by EIP-6492).
-    def eth_call(to, data, http: nil)
+    # `block` defaults to 'latest' or can be a hex block number (e.g. '0x10a2').
+    def eth_call(to, data, block: 'latest', http: nil)
       return nil unless rpc_url
 
       http ||= connection
@@ -39,7 +44,7 @@ module DiscourseSiwe
       req.body = {
         jsonrpc: '2.0',
         method: 'eth_call',
-        params: [call_params, 'latest'],
+        params: [call_params, block],
         id: 1
       }.to_json
 
@@ -48,6 +53,30 @@ module DiscourseSiwe
       return nil if result['error'] || result['result'].nil? || result['result'] == '0x'
 
       remove_hex_prefix(result['result'])
+    rescue StandardError
+      nil
+    end
+
+    def eth_block_number(http: nil)
+      return nil unless rpc_url
+
+      http ||= connection
+      path = URI(rpc_url).path
+      path = '/' if path.empty?
+
+      req = Net::HTTP::Post.new(path, 'Content-Type' => 'application/json')
+      req.body = {
+        jsonrpc: '2.0',
+        method: 'eth_blockNumber',
+        params: [],
+        id: 1
+      }.to_json
+
+      response = http.request(req)
+      result = JSON.parse(response.body)
+      return nil if result['error'] || result['result'].nil?
+
+      result['result'].to_i(16)
     rescue StandardError
       nil
     end
