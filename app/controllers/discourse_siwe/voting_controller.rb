@@ -55,6 +55,7 @@ module DiscourseSiwe
           ends_at: proposal.ends_at.iso8601,
           status: proposal.status,
           is_active: proposal.active?,
+          shielded: proposal.respond_to?(:shielded) ? proposal.shielded : false,
           strategy_rules: proposal.strategy_rules,
         },
         tally: tally,
@@ -73,6 +74,7 @@ module DiscourseSiwe
       ends_at = params[:ends_at]
       strategy_rules = params[:strategy_rules]
       snapshot_block = params[:snapshot_block].to_i
+      shielded_param = params[:shielded]
 
       if topic_id <= 0
         return render json: { error: 'Invalid or missing topic_id' }, status: 400
@@ -96,6 +98,8 @@ module DiscourseSiwe
 
       rules = strategy_rules.is_a?(Hash) ? strategy_rules : DiscourseSiwe::VotingStrategy::DEFAULT_RULES
 
+      shielded = shielded_param.nil? ? SiteSetting.siwe_voting_shielded_default : (shielded_param == true || shielded_param == 'true')
+
       proposal = SpProposal.find_or_initialize_by(topic_id: topic_id)
       proposal.assign_attributes(
         title: title,
@@ -103,6 +107,7 @@ module DiscourseSiwe
         snapshot_block: snapshot_block,
         ends_at: parsed_ends_at,
         strategy_rules: rules,
+        shielded: shielded,
         status: :open,
       )
 

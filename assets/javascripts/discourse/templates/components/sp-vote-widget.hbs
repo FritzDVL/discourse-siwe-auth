@@ -2,17 +2,26 @@
   <div class='sp-vote-widget'>
     <div class='sp-vote-header'>
       <div class='sp-vote-header-info'>
-        <span
-          class='sp-vote-badge {{if this.proposal.is_active "active" "closed"}}'
-        >
-          {{#if this.proposal.is_active}}
-            {{d-icon 'bolt'}}
-            Active Proposal
-          {{else}}
-            {{d-icon 'lock'}}
-            Voting Closed
+        <div class='sp-vote-badges'>
+          <span
+            class='sp-vote-badge
+              {{if this.proposal.is_active "active" "closed"}}'
+          >
+            {{#if this.proposal.is_active}}
+              {{d-icon 'bolt'}}
+              Active Proposal
+            {{else}}
+              {{d-icon 'lock'}}
+              Voting Closed
+            {{/if}}
+          </span>
+          {{#if this.proposal.shielded}}
+            <span class='sp-vote-badge shielded'>
+              {{d-icon 'shield-alt'}}
+              Shielded Ballot
+            </span>
           {{/if}}
-        </span>
+        </div>
         <span class='sp-vote-meta'>
           Snapshot Block:
           <strong>#{{this.proposal.snapshot_block}}</strong>
@@ -20,6 +29,16 @@
       </div>
       <h3 class='sp-vote-title'>{{this.proposal.title}}</h3>
     </div>
+
+    {{#if this.tally.is_shielded}}
+      <div class='sp-vote-alert shielded-info'>
+        {{d-icon 'user-secret'}}
+        <span><strong>Shielded Voting Active:</strong>
+          Results are hidden to avoid voter bias and will be unveiled once
+          voting ends on
+          {{this.formattedEndsAt}}.</span>
+      </div>
+    {{/if}}
 
     {{#if this.errorMessage}}
       <div class='sp-vote-alert error'>
@@ -59,17 +78,28 @@
                   Your Vote</span>
               {{/if}}
             </div>
-            <div class='sp-vote-option-stats'>
-              <span class='sp-vote-power'>{{opt.voting_power}} Power</span>
-              <span class='sp-vote-percent'>{{opt.percentage}}%</span>
+
+            {{#if this.tally.is_shielded}}
+              <div class='sp-vote-option-stats shielded'>
+                <span class='sp-vote-shielded-pill'>{{d-icon 'lock'}}
+                  Shielded</span>
+              </div>
+            {{else}}
+              <div class='sp-vote-option-stats'>
+                <span class='sp-vote-power'>{{opt.voting_power}} Power</span>
+                <span class='sp-vote-percent'>{{opt.percentage}}%</span>
+              </div>
+            {{/if}}
+          </div>
+
+          {{#unless this.tally.is_shielded}}
+            <div class='sp-vote-progress-bar-bg'>
+              <div
+                class='sp-vote-progress-bar-fill'
+                style={{concat 'width: ' opt.percentage '%'}}
+              ></div>
             </div>
-          </div>
-          <div class='sp-vote-progress-bar-bg'>
-            <div
-              class='sp-vote-progress-bar-fill'
-              style={{concat 'width: ' opt.percentage '%'}}
-            ></div>
-          </div>
+          {{/unless}}
         </div>
       {{/each}}
     </div>
@@ -78,7 +108,7 @@
       <div class='sp-vote-user-status'>
         {{#if this.userWallet}}
           <div class='sp-vote-power-tag'>
-            {{d-icon 'shield-alt'}}
+            {{d-icon 'id-card'}}
             <span>Your Voting Power: <strong>{{this.userPower}}</strong></span>
           </div>
         {{else}}

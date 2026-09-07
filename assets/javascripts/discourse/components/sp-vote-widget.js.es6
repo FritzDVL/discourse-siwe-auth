@@ -22,6 +22,16 @@ export default Component.extend({
     return !!this.userVote
   }),
 
+  formattedEndsAt: computed('proposal.ends_at', function () {
+    if (!this.proposal || !this.proposal.ends_at) return ''
+    try {
+      const d = new Date(this.proposal.ends_at)
+      return d.toLocaleString()
+    } catch (e) {
+      return this.proposal.ends_at
+    }
+  }),
+
   canVote: computed(
     'proposal.is_active',
     'hasVoted',

@@ -9,6 +9,7 @@ class CreateSpVotingTables < ActiveRecord::Migration[7.0]
       t.bigint :snapshot_block, null: false
       t.datetime :ends_at, null: false
       t.jsonb :strategy_rules, default: {}
+      t.boolean :shielded, default: false, null: false
       t.integer :status, default: 0, null: false
       t.timestamps
     end

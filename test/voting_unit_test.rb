@@ -118,6 +118,32 @@ class ProposalTallyLogicTest < Minitest::Test
     assert_equal 0.0, result[:tallies][2][:voting_power]
     assert_equal 0.0, result[:tallies][2][:percentage]
   end
+
+  def test_shielded_tally_masked_when_active
+    options = ['Option A', 'Option B']
+    votes = [VoteMock.new([0], 10.0)]
+
+    # Mocking shielded proposal behavior
+    proposal = Struct.new(:options, :shielded?, :active?, :sp_votes) do
+      def tally_results(mask_shielded: true)
+        if mask_shielded && shielded? && active?
+          return {
+            is_shielded: true,
+            total_votes: sp_votes.size,
+            total_power: nil,
+            tallies: options.map.with_index { |opt, idx| { index: idx, label: opt, vote_count: nil, voting_power: nil, percentage: nil } }
+          }
+        end
+      end
+    end.new(options, true, true, votes)
+
+    shielded_result = proposal.tally_results(mask_shielded: true)
+    assert_equal true, shielded_result[:is_shielded]
+    assert_nil shielded_result[:total_power]
+    assert_nil shielded_result[:tallies][0][:percentage]
+    assert_nil shielded_result[:tallies][0][:voting_power]
+    assert_equal 1, shielded_result[:total_votes]
+  end
 end
 
 # If Digest::Keccak is not installed on system ruby, provide a mock for EthRpc.keccak256

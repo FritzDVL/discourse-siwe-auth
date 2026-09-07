@@ -94,6 +94,17 @@
           background-color: var(--primary-low);
           color: var(--primary-medium);
         }
+
+        &.shielded {
+          background-color: rgba(var(--tertiary-rgb), 0.15);
+          color: var(--tertiary);
+        }
+      }
+
+      .sp-vote-badges {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
       }
 
       .sp-vote-meta {
@@ -129,6 +140,12 @@
       background-color: rgba(var(--success-rgb), 0.1);
       color: var(--success);
       border: 1px solid rgba(var(--success-rgb), 0.25);
+    }
+
+    &.shielded-info {
+      background-color: rgba(var(--tertiary-rgb), 0.08);
+      color: var(--primary-high);
+      border: 1px solid rgba(var(--tertiary-rgb), 0.25);
     }
   }
 
@@ -214,6 +231,17 @@
             color: var(--primary);
             min-width: 3rem;
             text-align: right;
+          }
+
+          .sp-vote-shielded-pill {
+            font-size: var(--font-down-2);
+            color: var(--primary-medium);
+            background-color: var(--primary-low);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
           }
         }
       }

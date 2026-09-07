@@ -16,8 +16,28 @@ class SpProposal < ActiveRecord::Base
     open? && Time.now.utc < ends_at
   end
 
-  def tally_results
+  def tally_results(mask_shielded: true)
     parsed_options = options.is_a?(Array) ? options : []
+
+    if mask_shielded && respond_to?(:shielded) && shielded? && active?
+      tally = parsed_options.each_with_index.map do |opt, idx|
+        {
+          index: idx,
+          label: opt.to_s,
+          vote_count: nil,
+          voting_power: nil,
+          percentage: nil,
+        }
+      end
+
+      return {
+        is_shielded: true,
+        total_votes: sp_votes.count,
+        total_power: nil,
+        tallies: tally,
+      }
+    end
+
     tally = parsed_options.each_with_index.map do |opt, idx|
       {
         index: idx,
@@ -52,6 +72,7 @@ class SpProposal < ActiveRecord::Base
     end
 
     {
+      is_shielded: false,
       total_votes: votes.size,
       total_power: total_power,
       tallies: tally,

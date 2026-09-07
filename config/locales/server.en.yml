@@ -12,3 +12,4 @@ en:
     siwe_voting_enabled: 'Enable off-chain native token voting for topics tagged with the voting tag'
     siwe_voting_chain_id: 'Ethereum chain ID used for EIP-712 voting domain (1 for Ethereum Mainnet)'
     siwe_voting_tag: 'Topic tag that activates native token voting (default: governance)'
+    siwe_voting_shielded_default: 'Whether new governance proposals should default to shielded voting (votes hidden until voting ends)'

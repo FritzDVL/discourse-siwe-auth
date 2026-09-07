@@ -32,3 +32,6 @@ discourse_siwe:
   siwe_voting_tag:
     client: true
     default: 'governance'
+  siwe_voting_shielded_default:
+    client: true
+    default: false
