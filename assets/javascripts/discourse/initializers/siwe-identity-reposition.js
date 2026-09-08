@@ -28,7 +28,6 @@ export default {
             return;
           }
 
-          // Find the form/wrapper that contains the profile fields.
           const container =
             selector.closest("form") ||
             document.querySelector(".user-preferences-outlet form") ||
@@ -37,7 +36,6 @@ export default {
             return;
           }
 
-          // Avoid unnecessary DOM churn and event re-firing.
           if (container.firstElementChild === selector) {
             return;
           }
