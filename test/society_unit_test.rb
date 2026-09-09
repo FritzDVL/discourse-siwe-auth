@@ -84,6 +84,32 @@ class EnsNamehashTest < Minitest::Test
   end
 end
 
+class IdentityResolverNormalizeTest < Minitest::Test
+  def resolver
+    DiscourseSiwe::IdentityResolver.new('0x' + 'a' * 40)
+  end
+
+  def test_rewrites_ipfs_urls_to_filebase
+    url = resolver.send(:normalize_url, 'https://ipfs.io/ipfs/Qmf6wEu7G53TCwfb4buUWuLE1dZ4fxV36NaVkgKBbsb78A')
+    assert_equal(
+      'https://ipfs.filebase.io/ipfs/Qmf6wEu7G53TCwfb4buUWuLE1dZ4fxV36NaVkgKBbsb78A',
+      url
+    )
+  end
+
+  def test_rewrites_ipfs_scheme
+    url = resolver.send(:normalize_url, 'ipfs://bafkreia5kp3zje463izrsrz3usdlu4nrmmnqoothvzc2vnl7yma75swoma')
+    assert_equal(
+      'https://ipfs.filebase.io/ipfs/bafkreia5kp3zje463izrsrz3usdlu4nrmmnqoothvzc2vnl7yma75swoma',
+      url
+    )
+  end
+
+  def test_drops_data_uri_avatars
+    assert_nil resolver.send(:normalize_url, 'data:image/png;base64,abc')
+  end
+end
+
 class IdentityStoreTest < Minitest::Test
   def test_default_preference_society_wins
     cf = { 'society_name' => 'Society Member', 'ens_name' => 'foo.eth' }

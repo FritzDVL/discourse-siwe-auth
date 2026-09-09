@@ -24,6 +24,11 @@ module DiscourseSiwe
           name
           bio
           imageUrl
+          metadata {
+            name
+            bio
+            imageUrl
+          }
           profile {
             id
             name
@@ -34,6 +39,7 @@ module DiscourseSiwe
         }
       }
     GRAPHQL
+    FILEBASE_GATEWAY = 'https://ipfs.filebase.io/ipfs/'
 
     def self.resolve(wallet_address)
       new(wallet_address).resolve
@@ -75,11 +81,18 @@ module DiscourseSiwe
       return nil unless data
 
       profile = data['profile'] || {}
+      metadata = data['metadata'] || {}
       {
         badge_id: profile['id'],
-        name:   first_non_empty(data['name'], profile['name']),
-        bio:    first_non_empty(data['bio'], profile['description']),
-        avatar: normalize_url(first_non_empty(data['imageUrl'], profile['imageUrl'])),
+        name:   first_non_empty(data['name'], metadata['name'], profile['name']),
+        bio:    first_non_empty(data['bio'], metadata['bio'], profile['description']),
+        avatar: normalize_url(
+          first_non_empty(
+            data['imageUrl'],
+            metadata['imageUrl'],
+            profile['imageUrl'],
+          )
+        ),
         uri:    profile['uri'],
       }
     rescue StandardError => e
@@ -122,9 +135,11 @@ module DiscourseSiwe
 
         {
           badge_id: badge_id.to_s,
-          name:   meta&.dig('name'),
-          bio:    meta&.dig('description'),
-          avatar: normalize_url(meta&.dig('image')),
+          name:   first_non_empty(meta&.dig('name')),
+          bio:    first_non_empty(meta&.dig('bio'), meta&.dig('description')),
+          avatar: normalize_url(
+            first_non_empty(meta&.dig('imageUrl'), meta&.dig('image'))
+          ),
           uri:    metadata_uri,
         }
       end
@@ -148,8 +163,17 @@ module DiscourseSiwe
     end
 
     def normalize_url(url)
-      return nil if url.to_s.strip.empty?
-      url.start_with?('ipfs://') ? url.sub('ipfs://', 'https://ipfs.io/ipfs/') : url
+      value = url.to_s.strip
+      return nil if value.empty?
+      return nil if value.start_with?('data:')
+
+      if value.start_with?('ipfs://')
+        value = "#{FILEBASE_GATEWAY}#{value.delete_prefix('ipfs://')}"
+      end
+      match = value.match(%r{/ipfs/([^/?#]+)})
+      return "#{FILEBASE_GATEWAY}#{match[1]}" if match
+
+      value
     end
 
     def first_non_empty(*values)
